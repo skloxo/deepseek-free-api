@@ -88,6 +88,7 @@ async function requestToken(refreshToken: string) {
         headers: {
           Authorization: `Bearer ${refreshToken}`,
           ...FAKE_HEADERS,
+          Cookie: generateCookie()
         },
         timeout: 15000,
         validateStatus: () => true,
@@ -107,7 +108,12 @@ async function requestToken(refreshToken: string) {
         );
         delete accessTokenRequestQueueMap[refreshToken];
       }
-      logger.success(`Refresh successful`);
+      // ✅ 只在 token 有效时记录成功
+      if (result.accessToken) {
+        logger.success(`Refresh successful`);
+      } else {
+        logger.error(`Refresh failed: token is null`);
+      }
       return result;
     })
     .catch((err) => {
@@ -533,7 +539,16 @@ function checkResult(result: AxiosResponse, refreshToken: string) {
   if (!result.data) return null;
   const { code, data, msg } = result.data;
   if (!_.isFinite(code)) return result.data;
-  if (code === 0) return data;
+  if (code === 0) {
+    // ✅ 处理新的响应结构：data.biz_data.token
+    const token = data?.biz_data?.token || data?.token;
+    if (token) {
+      // 如果有 token，添加到返回对象中（保持原有结构）
+      return { ...data, token };
+    }
+    // 如果没有 token，直接返回 data（可能是其他类型的响应）
+    return data;
+  }
   if (code == 40003) accessTokenMap.delete(refreshToken);
   throw new APIException(EX.API_REQUEST_FAILED, `[请求deepseek失败]: ${msg}`);
 }
@@ -570,11 +585,46 @@ async function receiveStream(model: string, stream: any, refConvId?: string): Pr
     };
     const parser = createParser((event) => {
       try {
-        if (event.type !== "event" || event.data.trim() == "[DONE]") return;
+        if (event.type !== "event") return;
+        if (event.data.trim() == "[DONE]") return;
+        
         // 解析JSON
         const result = _.attempt(() => JSON.parse(event.data));
         if (_.isError(result))
           throw new Error(`Stream response invalid: ${event.data}`);
+        
+        // ✅ 处理新的 DeepSeek 响应格式
+        // 第一个 chunk: {"p":"response/content","o":"APPEND","v":"你好"}
+        // 后续 chunk: {"v":"！"}
+        if (result.v && (result.p === "response/content" || (!result.p && !result.o))) {
+          // 确保 v 是字符串，不是对象
+          if (typeof result.v === 'string') {
+            data.choices[0].message.content += result.v;
+            // DEBUG removed
+          } else {
+            // DEBUG removed
+          }
+          return;
+        }
+        
+        // ✅ 处理 token 使用量
+        if (result.p === "response/accumulated_token_usage" && result.v) {
+          data.usage.completion_tokens = result.v;
+          data.usage.total_tokens = data.usage.prompt_tokens + result.v;
+          return;
+        }
+        
+        // ✅ 处理完成状态
+        if (result.p === "response/status" && result.v === "FINISHED") {
+          data.choices[0].finish_reason = "stop";
+          // DEBUG removed
+          // DEBUG removed
+          // 立即 resolve，不等 stream close
+          resolve(data);
+          return;
+        }
+        
+        // 旧格式兼容（如果还有的话）
         if (!result.choices || !result.choices[0] || !result.choices[0].delta)
           return;
         if (!data.id)
@@ -613,9 +663,21 @@ async function receiveStream(model: string, stream: any, refConvId?: string): Pr
       }
     });
     // 将流数据喂给SSE转换器
-    stream.on("data", (buffer) => parser.feed(buffer.toString()));
+    stream.on("data", (buffer) => {
+      const chunk = buffer.toString();
+      // DEBUG removed
+      parser.feed(chunk);
+    });
     stream.once("error", (err) => reject(err));
-    stream.once("close", () => resolve(data));
+    // ✅ 不在 close 时 resolve，等 FINISHED 状态
+    stream.once("close", () => {
+      // 如果流关闭但还没 resolve（异常情况），则 resolve
+      if (data.choices[0].finish_reason !== "stop") {
+        logger.warn("Stream closed without FINISHED status");
+        data.choices[0].finish_reason = "stop";
+        resolve(data);
+      }
+    });
   });
 }
 
