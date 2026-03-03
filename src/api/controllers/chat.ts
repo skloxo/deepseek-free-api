@@ -1224,7 +1224,7 @@ async function getThinkingQuota(refreshToken: string) {
 async function fetchAppVersion(): Promise<string> {
   try {
     logger.info('自动获取版本号');
-    const response = await axios.get('https://chat.deepseek.com/version.txt', {
+    const response = await axios.get('https://chat.deepseek.com/', {
       timeout: 5000,
       validateStatus: () => true,
       headers: {
@@ -1233,7 +1233,16 @@ async function fetchAppVersion(): Promise<string> {
       }
     });
     if (response.status === 200 && response.data) {
-      const version = response.data.toString().trim();
+      // 从 HTML 中提取 commit-id 作为版本号
+      const html = response.data.toString();
+      const commitMatch = html.match(/<meta name="commit-id" content="([^"]+)">/);
+      if (commitMatch && commitMatch[1]) {
+        const version = `20241129.${commitMatch[1].substring(0, 8)}`;
+        logger.info(`获取版本号: ${version}`);
+        return version;
+      }
+      // 如果提取失败，使用默认值
+      const version = "20241129.1";
       logger.info(`获取版本号: ${version}`);
       return version;
     }
