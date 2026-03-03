@@ -1,10 +1,46 @@
-# DeepSeek V3 Free 服务
+# DeepSeek V3 Free 服务（个人维护分支）
 
 <span>[ 中文 | <a href="README_EN.md">English</a> ]</span>
 
 [![](https://img.shields.io/github/license/llm-red-team/deepseek-free-api.svg)](LICENSE)
 ![](https://img.shields.io/github/stars/llm-red-team/deepseek-free-api.svg)
 ![](https://img.shields.io/github/forks/llm-red-team/deepseek-free-api.svg)
+
+---
+
+## ⚠️ 重要声明
+
+**本仓库是 [LLM-Red-Team/deepseek-free-api](https://github.com/LLM-Red-Team/deepseek-free-api) 的个人维护分支。**
+
+### 🚨 使用前必读
+
+**[📋 完整法律声明与免责协议 →](LEGAL_DISCLAIMER.md)**
+
+**核心要点：**
+- ✅ **仅限个人自用**
+- ❌ **禁止对外提供服务**
+- ❌ **禁止商业用途**
+- ⚠️ **风险自担**
+
+**如果您不同意以上条款，请立即停止使用本项目。**
+
+---
+
+## 🔧 本分支的修改
+
+修复了 4 个关键 Bug：
+1. X-App-Version header 格式错误
+2. requestToken 缺少 Cookie
+3. 响应结构变化（data.biz_data.token）
+4. 流数据格式完全变化
+
+**测试通过：**
+- ✅ Token 验证
+- ✅ 聊天功能
+- ✅ Token 统计
+
+---
+
 ![](https://img.shields.io/docker/pulls/vinlic/deepseek-free-api.svg)
 
 # 风险警告
